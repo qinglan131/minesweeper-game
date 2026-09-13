@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>扫雷小游戏</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui;
+        }
+        body {
+            background-color: #222;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 30px;
+        }
+        #info {
+            font-size: 22px;
+            margin-bottom:12px;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(16, 26px);
+            gap:2px;
+        }
+        .cell {
+            width:26px;
+            height:26px;
+            background:#777;
+            text-align:center;
+            line-height:26px;
+            font-weight:bold;
+            cursor:pointer;
+            user-select:none;
+        }
+        .cell.open {
+            background:#ddd;
+            color:#000;
+        }
+        .cell.mine {
+            background:#f44336;
+        }
+        .cell.flag {
+            background:#ffcc00;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">剩余地雷：<span id="mineCount">40</span></div>
+    <div id="board"></div>
+
+    <script>
+        const ROWS = 16;
+        const COLS = 16;
+        const MINE_NUM = 40;
+
+        let mineMap = [];
+        let openMap = [];
+        let flagMap = [];
+        let cellDomMap = []; // 直接保存格子DOM，不再查询
+        let remainMine = MINE_NUM;
+        let gameOver = false;
+
+        const board = document.getElementById('board');
+        const mineCountDom = document.getElementById('mineCount');
+
+        function init(){
+            board.innerHTML = '';
+            mineMap = Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+            openMap = Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+            flagMap = Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+            cellDomMap = Array(ROWS).fill().map(()=>Array(COLS).fill(null));
+            remainMine = MINE_NUM;
+            gameOver = false;
+            mineCountDom.innerText = remainMine;
+
+            // 生成地雷
+            let placed = 0;
+            while(placed < MINE_NUM){
+                let r = Math.floor(Math.random()*ROWS);
+                let c = Math.floor(Math.random()*COLS);
+                if(!mineMap[r][c]){
+                    mineMap[r][c] = true;
+                    placed++;
+                }
+            }
+
+            // 创建全部格子
+            for(let r=0;r<ROWS;r++){
+                for(let c=0;c<COLS;c++){
+                    const div = document.createElement('div');
+                    div.className = 'cell';
+                    cellDomMap[r][c] = div;
+
+                    div.onclick = ()=>clickCell(r,c);
+                    div.oncontextmenu = (e)=>{
+                        e.preventDefault();
+                        if(gameOver || openMap[r][c]) return;
+                        flagMap[r][c] = !flagMap[r][c];
+                        if(flagMap[r][c]){
+                            div.classList.add('flag');
+                            div.innerText = '🚩';
+                            remainMine--;
+                        }else{
+                            div.classList.remove('flag');
+                            div.innerText = '';
+                            remainMine++;
+                        }
+                        mineCountDom.innerText = remainMine;
+                    }
+                    board.appendChild(div);
+                }
+            }
+        }
+
+        // 统计周边地雷数量
+        function getMineCount(r,c){
+            let cnt = 0;
+            for(let dr=-1;dr<=1;dr++){
+                for(let dc=-1;dc<=1;dc++){
+                    const nr = r+dr;
+                    const nc = c+dc;
+                    if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS){
+                        if(mineMap[nr][nc]) cnt++;
+                    }
+                }
+            }
+            return cnt;
+        }
+
+        function clickCell(r,c){
+            if(gameOver || openMap[r][c] || flagMap[r][c]) return;
+            if(mineMap[r][c]){
+                gameOver = true;
+                alert("游戏结束！踩到地雷");
+                showAllMine();
+                return;
+            }
+            open(r,c);
+            checkWin();
+        }
+
+        function open(r,c){
+            if(r<0||r>=ROWS||c<0||c>=COLS||openMap[r][c]||flagMap[r][c]) return;
+            openMap[r][c]=true;
+            const cell = cellDomMap[r][c];
+            cell.classList.add('open');
+            const num = getMineCount(r,c);
+
+            if(num>0){
+                cell.innerText = num;
+                const colorList = ['blue','green','red','darkblue','brown','#00bbbb','black','#666666'];
+                cell.style.color = colorList[num-1];
+            }else{
+                for(let dr=-1;dr<=1;dr++){
+                    for(let dc=-1;dc<=1;dc++){
+                        open(r+dr,c+dc);
+                    }
+                }
+            }
+        }
+        function getCellDom(r,c){
+             return document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+         }
+         function showAllMine(){
+             for(let r=0;r<ROWS;r++){
+                 for(let c=0;c<COLS;c++){
+                     if(mineMap[r][c]){
+                         const cell = getCellDom(r,c);
+                         cell.classList.add('mine');
+                         cell.innerText = '💣';
+                     }
+                 }
+             }
+         }
+         function checkWin(){
+             let openCells = 0;
+             const totalSafe = ROWS*COLS - MINE_NUM;
+             for(let r=0;r<ROWS;r++){
+                 for(let c=0;c<COLS;c++){
+                     if(openMap[r][c]) openCells++;
+                 }
+             }
+             if(openCells === totalSafe){
+                 gameOver = true;
+                 alert("恭喜！扫雷成功！");
+             }
+         }
+         init();
+     </script>
+ </body>
+ </html>
