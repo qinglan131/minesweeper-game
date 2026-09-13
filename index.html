@@ -2,193 +2,149 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>扫雷小游戏</title>
+    <title>双模式扫雷</title>
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: system-ui;
+        *{box-sizing:border-box;font-family:system-ui}
+        body{display:flex;flex-direction:column;align-items:center;background:#f3f3f3;margin-top:20px}
+        .control{margin-bottom:12px;gap:10px;display:flex}
+        button{padding:8px 16px;font-size:16px;border:none;border-radius:6px;cursor:pointer}
+        #flagBtn{background:#ff6b6b;color:white}
+        #resetBtn{background:#4285F4;color:white}
+        .tip{margin-bottom:8px;font-size:17px}
+        table{border-collapse:collapse}
+        td{
+            width:44px;height:44px;text-align:center;
+            border:2px solid #888;
+            background:#c8c8c8;
+            font-weight:bold;font-size:20px;
+            cursor:pointer;user-select:none
         }
-        body {
-            background-color: #222;
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 30px;
-        }
-        #info {
-            font-size: 22px;
-            margin-bottom:12px;
-        }
-        #board {
-            display: grid;
-            grid-template-columns: repeat(16, 26px);
-            gap:2px;
-        }
-        .cell {
-            width:26px;
-            height:26px;
-            background:#777;
-            text-align:center;
-            line-height:26px;
-            font-weight:bold;
-            cursor:pointer;
-            user-select:none;
-        }
-        .cell.open {
-            background:#ddd;
-            color:#000;
-        }
-        .cell.mine {
-            background:#f44336;
-        }
-        .cell.flag {
-            background:#ffcc00;
-        }
+        td.open{background:#fff}
+        td.flag{color:red}
     </style>
 </head>
 <body>
-    <div id="info">剩余地雷：<span id="mineCount">40</span></div>
-    <div id="board"></div>
-
+    <div class="tip" id="modeTip">当前：正常点开模式</div>
+    <div class="control">
+        <button id="flagBtn">切换标记雷模式</button>
+        <button id="resetBtn">重新开始</button>
+    </div>
+    <div id="container"></div>
     <script>
-        const ROWS = 16;
-        const COLS = 16;
-        const MINE_NUM = 40;
-
-        let mineMap = [];
-        let openMap = [];
-        let flagMap = [];
-        let cellDomMap = []; // 直接保存格子DOM，不再查询
-        let remainMine = MINE_NUM;
+        const ROW = 10, COL = 10, MINE = 10;
+        let grid = [], mine = [], opened = [], flagged = [];
+        let isFlagMode = false;
         let gameOver = false;
 
-        const board = document.getElementById('board');
-        const mineCountDom = document.getElementById('mineCount');
+        const tipEl = document.getElementById("modeTip");
+        const flagBtn = document.getElementById("flagBtn");
+        const resetBtn = document.getElementById("resetBtn");
+        const container = document.getElementById("container");
 
-        function init(){
-            board.innerHTML = '';
-            mineMap = Array(ROWS).fill().map(()=>Array(COLS).fill(false));
-            openMap = Array(ROWS).fill().map(()=>Array(COLS).fill(false));
-            flagMap = Array(ROWS).fill().map(()=>Array(COLS).fill(false));
-            cellDomMap = Array(ROWS).fill().map(()=>Array(COLS).fill(null));
-            remainMine = MINE_NUM;
+        function initGame(){
             gameOver = false;
-            mineCountDom.innerText = remainMine;
+            isFlagMode = false;
+            tipEl.innerText = "当前：正常点开模式";
+            container.innerHTML = "";
+            grid = Array.from({length:ROW},()=>Array(COL).fill(0));
+            mine = Array.from({length:ROW},()=>Array(COL).fill(false));
+            opened = Array.from({length:ROW},()=>Array(COL).fill(false));
+            flagged = Array.from({length:ROW},()=>Array(COL).fill(false));
 
-            // 生成地雷
+            // 随机埋雷
             let placed = 0;
-            while(placed < MINE_NUM){
-                let r = Math.floor(Math.random()*ROWS);
-                let c = Math.floor(Math.random()*COLS);
-                if(!mineMap[r][c]){
-                    mineMap[r][c] = true;
-                    placed++;
-                }
+            while(placed < MINE){
+                let r = Math.floor(Math.random()*ROW);
+                let c = Math.floor(Math.random()*COL);
+                if(!mine[r][c]){ mine[r][c]=true; placed++; }
             }
-
-            // 创建全部格子
-            for(let r=0;r<ROWS;r++){
-                for(let c=0;c<COLS;c++){
-                    const div = document.createElement('div');
-                    div.className = 'cell';
-                    cellDomMap[r][c] = div;
-
-                    div.onclick = ()=>clickCell(r,c);
-                    div.oncontextmenu = (e)=>{
-                        e.preventDefault();
-                        if(gameOver || openMap[r][c]) return;
-                        flagMap[r][c] = !flagMap[r][c];
-                        if(flagMap[r][c]){
-                            div.classList.add('flag');
-                            div.innerText = '🚩';
-                            remainMine--;
-                        }else{
-                            div.classList.remove('flag');
-                            div.innerText = '';
-                            remainMine++;
+            // 填充数字
+            for(let r=0;r<ROW;r++){
+                for(let c=0;c<COL;c++){
+                    if(mine[r][c]) continue;
+                    let cnt = 0;
+                    for(let dr=-1;dr<=1;dr++)
+                        for(let dc=-1;dc<=1;dc++){
+                            let nr=r+dr, nc=c+dc;
+                            if(nr>=0&&nr<ROW&&nc>=0&&nc<COL&&mine[nr][nc]) cnt++;
                         }
-                        mineCountDom.innerText = remainMine;
-                    }
-                    board.appendChild(div);
+                    grid[r][c] = cnt;
                 }
             }
+            renderBoard();
         }
 
-        // 统计周边地雷数量
-        function getMineCount(r,c){
-            let cnt = 0;
-            for(let dr=-1;dr<=1;dr++){
-                for(let dc=-1;dc<=1;dc++){
-                    const nr = r+dr;
-                    const nc = c+dc;
-                    if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS){
-                        if(mineMap[nr][nc]) cnt++;
-                    }
-                }
-            }
-            return cnt;
-        }
-
-        function clickCell(r,c){
-            if(gameOver || openMap[r][c] || flagMap[r][c]) return;
-            if(mineMap[r][c]){
-                gameOver = true;
-                alert("游戏结束！踩到地雷");
-                showAllMine();
-                return;
-            }
-            open(r,c);
-            checkWin();
+        function checkWin(){
+            for(let r=0;r<ROW;r++)
+                for(let c=0;c<COL;c++)
+                    if(mine[r][c] && !flagged[r][c]) return false;
+            return true;
         }
 
         function open(r,c){
-            if(r<0||r>=ROWS||c<0||c>=COLS||openMap[r][c]||flagMap[r][c]) return;
-            openMap[r][c]=true;
-            const cell = cellDomMap[r][c];
-            cell.classList.add('open');
-            const num = getMineCount(r,c);
-
-            if(num>0){
-                cell.innerText = num;
-                const colorList = ['blue','green','red','darkblue','brown','#00bbbb','black','#666666'];
-                cell.style.color = colorList[num-1];
-            }else{
-                for(let dr=-1;dr<=1;dr++){
-                    for(let dc=-1;dc<=1;dc++){
-                        open(r+dr,c+dc);
-                    }
-                }
+            if(r<0||r>=ROW||c<0||c>=COL) return;
+            if(opened[r][c] || flagged[r][c]) return;
+            opened[r][c] = true;
+            if(grid[r][c]===0){
+                for(let dr=-1;dr<=1;dr++)
+                    for(let dc=-1;dc<=1;dc++) open(r+dr,c+dc);
             }
         }
-        function getCellDom(r,c){
-             return document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
-         }
-         function showAllMine(){
-             for(let r=0;r<ROWS;r++){
-                 for(let c=0;c<COLS;c++){
-                     if(mineMap[r][c]){
-                         const cell = getCellDom(r,c);
-                         cell.classList.add('mine');
-                         cell.innerText = '💣';
-                     }
+
+        function renderBoard(){
+            let tbl = document.createElement("table");
+            for(let r=0;r<ROW;r++){
+                let tr = document.createElement("tr");
+                for(let c=0;c<COL;c++){
+                    let td = document.createElement("td");
+                    td.dataset.r = r; td.dataset.c = c;
+                    if(opened[r][c]){
+                        td.classList.add("open");
+                        if(grid[r][c]>0) td.innerText = grid[r][c];
+                    }else if(flagged[r][c]){
+                        td.classList.add("flag");
+                        td.innerText = "🚩";
+                    }
+                    td.onclick = ()=>clickCell(r,c);
+                    tr.appendChild(td);
+                }
+                tbl.appendChild(tr);
+            }
+            container.innerHTML = "";
+            container.appendChild(tbl);
+        }
+
+        function clickCell(r,c){
+            if(gameOver) return;
+            if(isFlagMode){
+                // 标记/取消地雷旗帜
+                flagged[r][c] = !flagged[r][c];
+                renderBoard();
+                if(checkWin()){
+                    gameOver = true;
+                    setTimeout(()=>alert("🎉胜利！所有地雷标记完成"),100);
+                }
+            }else{
+                if(flagged[r][c]) return;
+                if(mine[r][c]){
+                    gameOver = true;
+                    alert("💥游戏失败，踩到地雷！");
+                    return;
+                    open(r,c);
+                 renderBoard();
+                 if(checkWin()){
+                     gameOver = true;
+                     setTimeout(()=>alert("🎉胜利！所有地雷标记完成"),100);
                  }
              }
          }
-         function checkWin(){
-             let openCells = 0;
-             const totalSafe = ROWS*COLS - MINE_NUM;
-             for(let r=0;r<ROWS;r++){
-                 for(let c=0;c<COLS;c++){
-                     if(openMap[r][c]) openCells++;
-                 }
-             }
-             if(openCells === totalSafe){
-                 gameOver = true;
-                 alert("恭喜！扫雷成功！");
-             }
+         flagBtn.onclick = ()=>{
+             isFlagMode = !isFlagMode;
+             tipEl.innerText = isFlagMode ? "当前：标记雷模式（点击插红旗）" : "当前：正常点开模式";
          }
-         init();
+         resetBtn.onclick = initGame;
+         initGame();
      </script>
  </body>
  </html>
+                }
