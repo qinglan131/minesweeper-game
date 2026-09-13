@@ -130,7 +130,8 @@
                     gameOver = true;
                     alert("💥游戏失败，踩到地雷！");
                     return;
-                    open(r,c);
+                }
+                 open(r,c);
                  renderBoard();
                  if(checkWin()){
                      gameOver = true;
@@ -147,4 +148,3 @@
      </script>
  </body>
  </html>
-                }
